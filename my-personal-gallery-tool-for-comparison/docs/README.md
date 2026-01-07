@@ -4,6 +4,7 @@ A local web application for managing and browsing your AI art generation referen
 
 ## Features
 
+### Gallery Management
 - 📋 **Browse 900+ artists** with smooth performance
 - ⭐ **Favorite artists** for quick access
 - 🏷️ **Tag system** with custom categories
@@ -12,6 +13,26 @@ A local web application for managing and browsing your AI art generation referen
 - 💾 **Persistent storage** - all preferences saved
 - 🎨 **Color-coded tags** for easy visual identification
 - 📱 **Responsive design** works on all screen sizes
+
+### Ranking System (NEW!)
+- 🏆 **Swiss Tournament Ranking** - Compare artists head-to-head
+- 📊 **ELO Rating System** - Fair matchmaking based on skill ratings
+- 🎯 **Automatic Grading** - SS, S, A, B, C, D, E, F grades based on ELO
+- ⬆️⬇️ **Smart Pairing** - Artists with similar ratings face off
+- ↩️ **Undo/Skip** - Flexible ranking with full history
+- ⌨️ **Keyboard Shortcuts** - Fast ranking with arrow keys
+- 📈 **Progress Tracking** - See ranking confidence level
+
+### Statistics & Analytics (NEW!)
+- 📋 **Copy Tracking** - Track which artists you copy most
+- 🕒 **Recent Copies** - See recently used artists with timestamps
+- 📊 **Grade Distribution** - Visual breakdown of artist grades
+- 🎯 **Rated Count** - Track ranking progress
+
+### Advanced Features (NEW!)
+- ⚖️ **Side-by-Side Comparison** - Compare two artists directly
+- 🎖️ **Grade Badges** - Visual indicators on artist cards
+- 🏅 **Copy Counters** - See usage statistics at a glance
 
 ## Quick Start
 
@@ -69,10 +90,85 @@ That's it! The server will start automatically and your browser will open to the
 2. View all tags and their usage
 3. Delete tags (removes from all artists)
 
+### Using the Ranking System
+
+The ranking system uses a Swiss tournament format with ELO ratings to help you identify your favorite artists.
+
+**Getting Started:**
+1. Switch to the "🏆 Ranking" tab
+2. Click "▶️ Start/Continue Ranking"
+3. Two artists will appear side-by-side
+4. Choose which style you prefer
+
+**Making Comparisons:**
+- **Click buttons** or use **keyboard shortcuts**:
+  - **← (Left Arrow)** - Pick the left artist
+  - **→ (Right Arrow)** - Pick the right artist
+  - **↑ (Up Arrow)** - Skip this comparison
+  - **↓ (Down Arrow)** - Undo last comparison
+
+**Understanding Progress:**
+- **Comparisons** - Total head-to-head matches completed
+- **Confidence Level** - Rating accuracy (Low → Very High)
+  - Low: 0-2 comparisons per artist
+  - Medium: 2-4 comparisons
+  - Good: 4-6 comparisons
+  - High: 6-8 comparisons
+  - Very High: 8+ comparisons
+
+**Applying Grades:**
+1. Rank artists until confidence is "Good" or higher
+2. Click "✓ Apply Grades"
+3. Grades are automatically assigned:
+   - **SS** - Top 5%
+   - **S** - Top 15%
+   - **A** - Top 30%
+   - **B** - Top 50%
+   - **C** - Top 70%
+   - **D** - Top 85%
+   - **E** - Top 95%
+   - **F** - Bottom 5%
+
+**How ELO Works:**
+- All artists start at 1500 rating
+- Beating higher-rated artists gives more points
+- System pairs similar-rated artists for fair matches
+- More comparisons = more accurate rankings
+
+### Using Comparison Mode
+
+**Purpose:** View two artists side-by-side to compare styles directly
+
+**Usage:**
+1. Switch to the "⚖️ Compare" tab
+2. Instructions will guide you to select artists from the Gallery tab
+3. (Note: Full implementation allows selecting from gallery view)
+
+### Viewing Statistics
+
+**Switch to the "📊 Stats" tab to see:**
+
+**Recent Copies:**
+- Artists you've recently copied to clipboard
+- Shows how long ago each was copied
+- Click an artist to navigate to them
+
+**Grade Distribution:**
+- Visual breakdown of how many artists in each grade
+- Horizontal bars show percentages
+- Helps identify if you need more rankings
+
 ### Keyboard Shortcuts
 
+**Global:**
 - **Esc** - Close any open modal
 - **Enter** - Add tag (when in tag input field)
+
+**Ranking Tab:**
+- **← (Left Arrow)** - Pick left artist
+- **→ (Right Arrow)** - Pick right artist
+- **↑ (Up Arrow)** - Skip comparison
+- **↓ (Down Arrow)** - Undo last comparison
 
 ### Adding New Images
 
@@ -98,11 +194,42 @@ gallery-project/
 ## Configuration
 
 All your preferences are saved in `config.json`:
-- Favorites
-- Tags
-- UI state (which galleries are expanded)
+- **Favorites** - Starred artists
+- **Tags** - Custom categories per artist
+- **Grades** - SS→F rankings
+- **ELO Ratings** - Ranking system data
+- **Copy History** - Usage tracking
+- **UI State** - Which galleries are expanded, grid size
 
-**Backup:** Simply copy `config.json` to save your data.
+**Data Structure:**
+```json
+{
+  "artists": {
+    "artist_name": {
+      "filename": "image.png",
+      "favorite": false,
+      "tags": ["landscape", "colorful"],
+      "grade": "A",
+      "elo": 1545,
+      "comparisons": 5,
+      "copyCount": 3
+    }
+  },
+  "rankHelper": {
+    "eloData": { /* ELO ratings */ },
+    "history": [ /* comparison history */ ],
+    "comparisonCount": 25
+  },
+  "copyHistory": [ /* recent copies with timestamps */ ],
+  "uiState": {
+    "expandedGalleries": ["favorites"],
+    "gridSize": 5
+  },
+  "globalTags": ["landscape", "portrait", "anime"]
+}
+```
+
+**Backup:** Simply copy `config.json` to save all your data including rankings.
 
 ## Troubleshooting
 
@@ -196,15 +323,28 @@ Your image files must follow this pattern:
 - Low memory footprint (~50MB)
 - Fast startup (~2 seconds)
 
+## Recent Updates
+
+**Version 2.0** - Major Feature Release:
+- ✅ ELO-based ranking system
+- ✅ Automatic grading (SS→F)
+- ✅ Grid size customization
+- ✅ Keyboard navigation for ranking
+- ✅ Copy tracking and statistics
+- ✅ Grade distribution visualization
+- ✅ Side-by-side comparison mode
+
 ## Future Enhancements
 
 Potential features for future versions:
 - Batch tagging (select multiple artists)
-- Export/import tags
+- Export/import functionality for rankings
 - Dark/light theme toggle
-- Grid size customization
-- Keyboard navigation
 - Tag categories with nesting
+- Danbooru tag library integration
+- Advanced filtering by grade range
+- Sort by copy count/ELO rating
+- Bulk grade assignment
 
 ## Support
 
