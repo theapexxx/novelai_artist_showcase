@@ -18,9 +18,13 @@ A comprehensive tool for managing, ranking, and organizing artist styles for use
 10. [Troubleshooting](#troubleshooting)
 
 ---
-
+## Artist Showcase
 <img width="1876" height="1171" alt="image" src="https://github.com/user-attachments/assets/578b5667-d51c-4e1f-835e-d77960f51dd4" />
+
+## Rank Helper
 <img width="1875" height="1178" alt="image" src="https://github.com/user-attachments/assets/dc2b0b73-ec3e-4a49-b394-7afba61e99b2" />
+
+## Tag Selector
 <img width="1871" height="1169" alt="image" src="https://github.com/user-attachments/assets/60e38b42-c738-453a-8bff-d039fe0bc225" />
 
 ## Overview
@@ -350,5 +354,6 @@ Feel free to modify and share this tool. Attribution appreciated but not require
 
 
 Happy genning!
+
 
 
