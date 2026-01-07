@@ -63,9 +63,8 @@ artist_showcase/
    ### 📁 [Download 896 Artist Samples (Google Drive)](https://drive.google.com/drive/folders/1zQV7ysyy96VEjUQMnfpSFV3e1GLszaCM?usp=sharing)
    ### 📁 [Or use this link (Mega.nz)](https://mega.nz/folder/HiA0AbbK#nEuW7WHLWYC1Os0CLdm2oQ)
    
-3. Place the downloaded `V4.5` folder in the `images/...` folder. It should be `images/V4.5/` in the tool directory.
-4. Copy all downloaded images into `images/V4.5/`
-5. Open `index.html` in your browser - done! ✨
+3. Place the downloaded `V4.5` folder in the `images/...` folder. It should be `images/V4.5/*all image files*` in the tool directory.
+4. Open `index.html` in your browser - done! ✨
 
 > **Tip**: The `artists_data.js` file is already included and matches the Google Drive images. No need to run any scripts!
 
@@ -344,5 +343,6 @@ Built for use with [NovelAI](https://novelai.net/) image generation.
 ## License
 
 Feel free to modify and share this tool. Attribution appreciated but not required.
+
 
 Happy genning!
