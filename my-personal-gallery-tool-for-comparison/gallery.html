@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Artist Gallery</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Loading Indicator -->
+  <div id="loadingScreen">
+    <div class="loader"></div>
+    <p>Loading gallery...</p>
+  </div>
+
+  <!-- Error Display -->
+  <div id="errorScreen" style="display: none;">
+    <div class="error-content">
+      <h1>⚠️ Error</h1>
+      <p id="errorMessage"></p>
+      <button onclick="location.reload()">Retry</button>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div id="mainContent" style="display: none;">
+    <!-- Header -->
+    <header>
+      <h1>🎨 AI Artist Gallery</h1>
+      <div class="controls">
+        <input type="text" id="searchInput" placeholder="🔍 Search artists, tags, or 'favorite'...">
+        <button id="refreshBtn" title="Rescan artists folder">🔄 Refresh</button>
+        <button id="settingsBtn" title="Manage tags">⚙️ Settings</button>
+      </div>
+      <button id="acknowledgeNewBtn" style="display:none">🆕 Acknowledge All New (<span id="newCount">0</span>)</button>
+    </header>
+
+    <!-- Statistics Bar -->
+    <div class="stats-bar">
+      <span>Total: <strong id="totalCount">0</strong></span>
+      <span>Favorites: <strong id="favCount">0</strong></span>
+      <span>Tags: <strong id="tagCount">0</strong></span>
+    </div>
+
+    <!-- Grid Size Control -->
+    <div class="grid-size-control">
+      <label for="gridSizeSlider">Grid Size:</label>
+      <input type="range" id="gridSizeSlider" min="2" max="8" value="5" step="1">
+      <span class="grid-value"><span id="gridSizeValue">5</span> per row</span>
+    </div>
+
+    <!-- Main Content -->
+    <main id="galleriesContainer">
+      <!-- Pinned Section -->
+      <section class="gallery-section">
+        <h2>━━━ PINNED ━━━━━━━━━━━━━━━</h2>
+        
+        <!-- All Artists -->
+        <div class="gallery" data-gallery="all">
+          <div class="gallery-header">
+            <span class="toggle-icon">▶</span>
+            <span class="gallery-title">📋 All Artists</span>
+            <span class="gallery-count">(<span class="count">0</span>)</span>
+          </div>
+          <div class="gallery-content" style="display:none;"></div>
+        </div>
+
+        <!-- Favorites -->
+        <div class="gallery" data-gallery="favorites">
+          <div class="gallery-header">
+            <span class="toggle-icon">▶</span>
+            <span class="gallery-title">⭐ Favorites</span>
+            <span class="gallery-count">(<span class="count">0</span>)</span>
+          </div>
+          <div class="gallery-content" style="display:none;"></div>
+        </div>
+
+        <!-- New -->
+        <div class="gallery" data-gallery="new">
+          <div class="gallery-header">
+            <span class="toggle-icon">▶</span>
+            <span class="gallery-title">🆕 New</span>
+            <span class="gallery-count">(<span class="count">0</span>)</span>
+          </div>
+          <div class="gallery-content" style="display:none;"></div>
+        </div>
+
+        <!-- Untagged -->
+        <div class="gallery" data-gallery="untagged">
+          <div class="gallery-header">
+            <span class="toggle-icon">▶</span>
+            <span class="gallery-title">🚫 Untagged</span>
+            <span class="gallery-count">(<span class="count">0</span>)</span>
+          </div>
+          <div class="gallery-content" style="display:none;"></div>
+        </div>
+      </section>
+
+      <!-- Tags Section -->
+      <section class="gallery-section">
+        <h2>━━━ TAGS ━━━━━━━━━━━━━━━━</h2>
+        <div id="tagGalleries"></div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Tag Management Modal -->
+  <div id="tagModal" class="modal" style="display:none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="modalArtistName">Manage Tags</h3>
+        <button class="close-btn" onclick="closeTagModal()">×</button>
+      </div>
+      
+      <div class="modal-body">
+        <div class="tag-input-section">
+          <label>Add Tag:</label>
+          <div class="tag-input">
+            <input type="text" id="newTagInput" placeholder="Type tag name..." onkeypress="if(event.key==='Enter') addTagFromModal()">
+            <button onclick="addTagFromModal()">➕ Add</button>
+          </div>
+        </div>
+
+        <div class="applied-tags-section">
+          <label>Applied Tags:</label>
+          <div id="appliedTags" class="tag-list"></div>
+        </div>
+
+        <div class="available-tags-section">
+          <label>Quick Add:</label>
+          <div id="availableTags" class="tag-list"></div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button onclick="closeTagModal()">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="modal" style="display:none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>⚙️ Tag Management</h3>
+        <button class="close-btn" onclick="closeSettingsModal()">×</button>
+      </div>
+      
+      <div class="modal-body">
+        <div class="settings-section">
+          <h4>All Tags (<span id="settingsTagCount">0</span>)</h4>
+          <div id="settingsTagList" class="settings-tag-list"></div>
+        </div>
+
+        <div class="settings-section">
+          <h4>Danger Zone</h4>
+          <button onclick="confirmReset()" class="danger-btn">🗑️ Reset All Data</button>
+          <p class="help-text">This will remove all favorites and tags (cannot be undone)</p>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button onclick="closeSettingsModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Image Lightbox -->
+  <div id="imageLightbox" style="display:none;">
+    <div class="close-lightbox" onclick="closeLightbox()">×</div>
+    <img id="lightboxImage" src="" alt="">
+    <div class="artist-info">
+      <span id="lightboxArtistName"></span>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
