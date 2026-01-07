@@ -59,4 +59,3 @@ $jsContent | Out-File -FilePath $outputPath -Encoding UTF8
 Write-Host "`nGenerated: $outputPath" -ForegroundColor Green
 Write-Host "Artist count: $($imageFiles.Count)" -ForegroundColor Green
 Write-Host "`nRefresh the HTML page to see the new artists!" -ForegroundColor Yellow
-
