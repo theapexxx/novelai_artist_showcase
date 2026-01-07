@@ -1693,7 +1693,7 @@
     
     <!-- Floating Menu Items -->
     <div class="fab-menu" id="fabMenu">
-        <div class="fab-item" onclick="toggleFloatingPanel('floatingStatsPanel')">
+        <div class="fab-item" onclick="toggleFloatingPanel('floatingStatsPanel'); updateStats();">
             <span class="fab-item-icon">📊</span>
             <span>Statistics</span>
             </div>
@@ -5145,13 +5145,13 @@
             const fabBtn = document.getElementById('floatingMenuBtn');
             const fabMenu = document.getElementById('fabMenu');
             if (tabName === 'artistShowcaseV4') {
-                fabBtn.classList.add('visible');
+                if (fabBtn) fabBtn.classList.add('visible');
             } else {
-                fabBtn.classList.remove('visible');
-                fabMenu.classList.remove('active');
-                closeAllFloatingPanels();
-                fabMenuOpen = false;
-                fabBtn.textContent = '☰';
+                if (fabBtn) fabBtn.classList.remove('visible');
+                if (fabMenu) fabMenu.classList.remove('active');
+                if (typeof closeAllFloatingPanels === 'function') closeAllFloatingPanels();
+                if (typeof fabMenuOpen !== 'undefined') fabMenuOpen = false;
+                if (fabBtn) fabBtn.textContent = '☰';
             }
         }
 
@@ -5189,6 +5189,20 @@
         
         // View mode: 'list' or 'grid'
         let currentViewMode = localStorage.getItem('artistViewMode') || 'list';
+        
+        // ========== RANK HELPER DATA (declared early for sorting) ==========
+        let rhEloData = {}; // { artistName: { elo: 1500, comparisons: 0 } }
+        let rhHistory = []; // Array of { winner, loser, winnerEloBefore, loserEloBefore }
+        let rhComparisonCount = 0;
+        let rhCurrentPair = null;
+        let rhActive = false;
+        const RH_K_FACTOR = 32; // ELO K-factor
+        const RH_INITIAL_ELO = 1500;
+        const RH_GRADES = ['SS', 'S', 'A', 'B', 'C', 'D', 'E', 'F'];
+        const RH_GRADE_PERCENTILES = [0.05, 0.15, 0.30, 0.50, 0.70, 0.85, 0.95, 1.0];
+        
+        // Floating menu state (declared early for openTab)
+        let fabMenuOpen = false;
         
         // ========== NEW FEATURE DATA ==========
         // Favorites stored in localStorage
@@ -5358,29 +5372,28 @@
                         return valA < valB ? 1 : valA > valB ? -1 : 0;
                     }
                 } else {
-                    // Sort by grade, then by ELO within same grade
-                    const gradeA = getGradeValue(a.rank);
-                    const gradeB = getGradeValue(b.rank);
+                    // Sort by ELO (which naturally reflects the ranking)
+                    // Higher ELO = better artist
+                    const eloA = (rhEloData[a.name] && rhEloData[a.name].elo) ? rhEloData[a.name].elo : RH_INITIAL_ELO;
+                    const eloB = (rhEloData[b.name] && rhEloData[b.name].elo) ? rhEloData[b.name].elo : RH_INITIAL_ELO;
                     
-                    // First compare by grade
-                    if (gradeA !== gradeB) {
+                    // If ELOs are equal, fall back to grade comparison
+                    if (eloA === eloB) {
+                        const gradeA = getGradeValue(a.rank);
+                        const gradeB = getGradeValue(b.rank);
                         if (currentSortOrderV4 === 'asc') {
-                            return gradeA > gradeB ? 1 : -1;
+                            return gradeA > gradeB ? 1 : gradeA < gradeB ? -1 : 0;
                         } else {
-                            return gradeA < gradeB ? 1 : -1;
+                            return gradeA < gradeB ? 1 : gradeA > gradeB ? -1 : 0;
                         }
                     }
                     
-                    // Same grade - sort by ELO (higher ELO = better, so descending within grade)
-                    const eloA = rhEloData[a.name]?.elo || 1500;
-                    const eloB = rhEloData[b.name]?.elo || 1500;
-                    
                     if (currentSortOrderV4 === 'asc') {
-                        // Ascending grade = worst first, within same grade show lowest ELO first
-                        return eloA > eloB ? 1 : eloA < eloB ? -1 : 0;
+                        // Ascending = lowest ELO first (worst artists)
+                        return eloA > eloB ? 1 : -1;
                     } else {
-                        // Descending grade = best first, within same grade show highest ELO first
-                        return eloA < eloB ? 1 : eloA > eloB ? -1 : 0;
+                        // Descending = highest ELO first (best artists)
+                        return eloA < eloB ? 1 : -1;
                     }
                 }
             });
@@ -5748,6 +5761,7 @@
         document.addEventListener('DOMContentLoaded', function () {
             loadRankingsV4(); // Load V4 ranks first
             loadExtendedDataV4(); // Load favorites and copy history
+            initRankHelper(); // Load ELO data BEFORE display (needed for sorting)
             initViewMode(); // Apply saved view mode
             displayArtistsV4(); // Display V4 artists
             updateRecentlyCopied(); // Show recently copied
@@ -5945,62 +5959,96 @@
         }
         
         // ========== STATISTICS ==========
+        // Valid letter grades for checking if an artist is rated
+        const STATS_VALID_GRADES = ['SS', 'S', 'A', 'B', 'C', 'D', 'E', 'F'];
+        
         function updateStats() {
-            const total = artistsV4.length;
-            const rated = artistsV4.filter(a => a.rank && a.rank > 0).length;
-            const favorites = favoritesV4.size;
-            const totalCopies = Object.values(copyHistoryV4).reduce((sum, h) => sum + h.count, 0);
-            
-            const statTotal = document.getElementById('statTotal');
-            const statRated = document.getElementById('statRated');
-            const statFavorites = document.getElementById('statFavorites');
-            const statTotalCopies = document.getElementById('statTotalCopies');
-            
-            if (statTotal) statTotal.textContent = total;
-            if (statRated) statRated.textContent = rated;
-            if (statFavorites) statFavorites.textContent = favorites;
-            if (statTotalCopies) statTotalCopies.textContent = totalCopies;
-            
-            // Update rating distribution bars
-            updateRatingDistribution();
+            try {
+                // Get data with fallbacks
+                const artists = (typeof artistsV4 !== 'undefined' && Array.isArray(artistsV4)) ? artistsV4 : [];
+                const favs = (typeof favoritesV4 !== 'undefined' && favoritesV4 instanceof Set) ? favoritesV4 : new Set();
+                const copyHist = (typeof copyHistoryV4 !== 'undefined' && copyHistoryV4) ? copyHistoryV4 : {};
+                
+                // Calculate statistics
+                const total = artists.length;
+                const rated = artists.filter(a => a.rank && STATS_VALID_GRADES.includes(a.rank)).length;
+                const favorites = favs.size;
+                const totalCopies = Object.values(copyHist).reduce((sum, h) => sum + (h && h.count ? h.count : 0), 0);
+                
+                // Update DOM elements
+                const statTotal = document.getElementById('statTotal');
+                const statRated = document.getElementById('statRated');
+                const statFavorites = document.getElementById('statFavorites');
+                const statTotalCopies = document.getElementById('statTotalCopies');
+                
+                if (statTotal) statTotal.textContent = total;
+                if (statRated) statRated.textContent = rated;
+                if (statFavorites) statFavorites.textContent = favorites;
+                if (statTotalCopies) statTotalCopies.textContent = totalCopies;
+                
+                // Update rating distribution bars
+                updateRatingDistribution();
+            } catch (e) {
+                console.error('updateStats error:', e);
+            }
+        }
+        
+        // Helper function for checking if artist is rated (used elsewhere)
+        function isArtistRated(artist) {
+            return artist && artist.rank && STATS_VALID_GRADES.includes(artist.rank);
         }
         
         function updateRatingDistribution() {
             const container = document.getElementById('ratingBars');
             if (!container) return;
             
-            // Group ratings into ranges
-            const ranges = [
-                { label: 'Unrated', min: 0, max: 0 },
-                { label: '1-20', min: 1, max: 20 },
-                { label: '21-40', min: 21, max: 40 },
-                { label: '41-60', min: 41, max: 60 },
-                { label: '61-80', min: 61, max: 80 },
-                { label: '81-100', min: 81, max: 100 }
-            ];
+            // Grade colors for visual distinction
+            const gradeColors = {
+                'SS': '#ffd700', // Gold
+                'S': '#c0c0c0',  // Silver
+                'A': '#cd7f32',  // Bronze
+                'B': '#03dac6',  // Teal
+                'C': '#bb86fc',  // Purple
+                'D': '#6b6b6b',  // Gray
+                'E': '#cf6679',  // Pink/Red
+                'F': '#ff4444',  // Red
+                'Unrated': '#444'
+            };
             
-            const counts = ranges.map(range => ({
-                label: range.label,
-                count: artistsV4.filter(a => {
-                    const rank = a.rank || 0;
-                    return rank >= range.min && rank <= range.max;
-                }).length
-            }));
+            // Count artists per grade
+            const gradeCounts = {};
+            STATS_VALID_GRADES.forEach(g => gradeCounts[g] = 0);
+            gradeCounts['Unrated'] = 0;
             
-            const maxCount = Math.max(...counts.map(c => c.count), 1);
+            const artists = (typeof artistsV4 !== 'undefined' && Array.isArray(artistsV4)) ? artistsV4 : [];
+            artists.forEach(a => {
+                if (a && a.rank && STATS_VALID_GRADES.includes(a.rank)) {
+                    gradeCounts[a.rank]++;
+                } else {
+                    gradeCounts['Unrated']++;
+                }
+            });
+            
+            // Build the display order: Unrated first, then SS to F
+            const displayOrder = ['Unrated', ...STATS_VALID_GRADES];
+            const maxCount = Math.max(...Object.values(gradeCounts), 1);
             
             container.innerHTML = '';
-            counts.forEach(({ label, count }) => {
+            displayOrder.forEach(grade => {
+                const count = gradeCounts[grade];
                 const bar = document.createElement('div');
                 bar.className = 'rating-bar';
                 
                 const labelSpan = document.createElement('span');
                 labelSpan.className = 'rating-bar-label';
-                labelSpan.textContent = label;
+                labelSpan.textContent = grade;
+                labelSpan.style.color = gradeColors[grade] || '#888';
+                labelSpan.style.fontWeight = grade !== 'Unrated' ? 'bold' : 'normal';
                 
                 const fillDiv = document.createElement('div');
                 fillDiv.className = 'rating-bar-fill';
                 fillDiv.style.width = `${(count / maxCount) * 150}px`;
+                fillDiv.style.backgroundColor = gradeColors[grade] || '#666';
                 
                 const countSpan = document.createElement('span');
                 countSpan.className = 'rating-bar-count';
@@ -6014,7 +6062,7 @@
         }
         
         // ========== FLOATING PANELS ==========
-        let fabMenuOpen = false;
+        // fabMenuOpen is declared at the top of the script
         
         function toggleFloatingMenu() {
             fabMenuOpen = !fabMenuOpen;
@@ -6221,18 +6269,7 @@
         
         // ========== RANK HELPER SYSTEM ==========
         // ELO-based Swiss Tournament Ranking
-        
-        let rhEloData = {}; // { artistName: { elo: 1500, comparisons: 0 } }
-        let rhHistory = []; // Array of { winner, loser, winnerEloBefore, loserEloBefore }
-        let rhComparisonCount = 0;
-        let rhCurrentPair = null;
-        let rhActive = false;
-        const RH_K_FACTOR = 32; // ELO K-factor
-        const RH_INITIAL_ELO = 1500;
-        
-        // Grade thresholds (percentile-based)
-        const RH_GRADES = ['SS', 'S', 'A', 'B', 'C', 'D', 'E', 'F'];
-        const RH_GRADE_PERCENTILES = [0.05, 0.15, 0.30, 0.50, 0.70, 0.85, 0.95, 1.0];
+        // Variables are declared at the top of the script for early access
         
         function initRankHelper() {
             // Load saved ELO data
@@ -6559,8 +6596,8 @@
         
         document.addEventListener('keydown', handleRhKeyboard);
         
-        // Initialize Rank Helper when DOM is ready
-        document.addEventListener('DOMContentLoaded', initRankHelper);
+        // Note: initRankHelper is called in the main DOMContentLoaded handler above
+        // to ensure ELO data is loaded before displayArtistsV4 runs
         
     </script>
 </body>
