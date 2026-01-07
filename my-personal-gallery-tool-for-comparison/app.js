@@ -7,8 +7,33 @@ const state = {
   virtualScrollers: {},
   currentModalArtist: null,
   gridSize: 5, // Default grid columns
-  imageObserver: null // Intersection Observer for lazy loading
+  imageObserver: null, // Intersection Observer for lazy loading
+
+  // Ranking system state
+  rankHelper: {
+    eloData: {}, // { artistName: { elo: 1500, comparisons: 0 } }
+    history: [], // Array of { winner, loser, winnerEloBefore, loserEloBefore }
+    comparisonCount: 0,
+    currentPair: null
+  },
+
+  // Comparison mode state
+  comparisonMode: {
+    active: false,
+    slots: [null, null] // Two comparison slots
+  },
+
+  // Copy tracking
+  copyHistory: {}, // { artistName: count }
+  recentCopies: [] // [{ name, timestamp }, ...]
 };
+
+// ===== RANKING CONSTANTS =====
+const RH_K_FACTOR = 32; // ELO K-factor
+const RH_INITIAL_ELO = 1500;
+const RH_TARGET_COMPARISONS = 4; // Target comparisons per artist
+const RH_GRADES = ['SS', 'S', 'A', 'B', 'C', 'D', 'E', 'F'];
+const RH_GRADE_PERCENTILES = [0.05, 0.15, 0.30, 0.50, 0.70, 0.85, 0.95, 1.0];
 
 // ===== LAZY LOADING SETUP =====
 function setupLazyLoading() {
@@ -146,9 +171,20 @@ function processImages(filenames) {
         filename: filename,
         favorite: false,
         tags: ['new'],
-        addedDate: new Date().toISOString()
+        addedDate: new Date().toISOString(),
+        grade: null, // SS, S, A, B, C, D, E, F, or null
+        elo: RH_INITIAL_ELO,
+        comparisons: 0,
+        copyCount: 0
       };
       newArtists.push(artistName);
+    } else {
+      // Ensure existing artists have new fields
+      const artist = state.config.artists[artistName];
+      if (artist.grade === undefined) artist.grade = null;
+      if (artist.elo === undefined) artist.elo = RH_INITIAL_ELO;
+      if (artist.comparisons === undefined) artist.comparisons = 0;
+      if (artist.copyCount === undefined) artist.copyCount = 0;
     }
   });
   
@@ -221,6 +257,43 @@ function updateStatistics() {
   document.getElementById('totalCount').textContent = state.allArtists.length;
   document.getElementById('favCount').textContent = state.galleries.favorites.length;
   document.getElementById('tagCount').textContent = state.config.globalTags.length;
+}
+
+function updateEnhancedStatistics() {
+  // Update basic stats
+  updateStatistics();
+
+  // Update grade distribution
+  const gradeDistribution = {};
+  RH_GRADES.forEach(grade => {
+    gradeDistribution[grade] = 0;
+  });
+
+  let ratedCount = 0;
+  state.allArtists.forEach(artist => {
+    if (artist.grade) {
+      gradeDistribution[artist.grade]++;
+      ratedCount++;
+    }
+  });
+
+  // Update stats panel if it exists
+  const ratedEl = document.getElementById('ratedCount');
+  if (ratedEl) {
+    ratedEl.textContent = ratedCount;
+  }
+
+  // Update grade distribution bars
+  RH_GRADES.forEach(grade => {
+    const countEl = document.getElementById(`gradeCount${grade}`);
+    const barEl = document.getElementById(`gradeBar${grade}`);
+    if (countEl && barEl) {
+      const count = gradeDistribution[grade];
+      countEl.textContent = count;
+      const percentage = ratedCount > 0 ? (count / ratedCount) * 100 : 0;
+      barEl.style.width = `${percentage}%`;
+    }
+  });
 }
 
 // ===== GALLERY RENDERING =====
@@ -404,7 +477,17 @@ function createArtistCard(artist) {
       return `<span class="tag ${tag === 'new' ? 'tag-new' : ''}" style="background: ${color}">${tag}</span>`;
     })
     .join('');
-  
+
+  // Grade badge HTML
+  const gradeBadgeHtml = artist.grade
+    ? `<span class="grade-badge grade-${artist.grade.toLowerCase()}">${artist.grade}</span>`
+    : '';
+
+  // Copy count display
+  const copyCountHtml = artist.copyCount > 0
+    ? `<span class="copy-count" title="Copied ${artist.copyCount} times">📋 ${artist.copyCount}</span>`
+    : '';
+
   card.innerHTML = `
     <div class="card-image-container">
       <img data-src="artists/${artist.filename}" alt="${artist.name}" loading="lazy" data-artist="${artist.name}" style="background: #1a1a1a;">
@@ -415,10 +498,14 @@ function createArtistCard(artist) {
         </button>
         <button class="tag-btn" title="Manage tags">🏷️</button>
       </div>
+      ${gradeBadgeHtml ? `<div class="card-grade-badge">${gradeBadgeHtml}</div>` : ''}
     </div>
     <div class="card-footer">
       <div class="artist-name" data-artist="${artist.name}" title="Click to copy: ${artist.name}">${artist.name}</div>
-      <div class="artist-tags">${tagHtml}</div>
+      <div class="artist-meta">
+        <div class="artist-tags">${tagHtml}</div>
+        ${copyCountHtml}
+      </div>
     </div>
   `;
   
@@ -875,11 +962,14 @@ function closeLightbox() {
 async function copyArtistName(artistName, element) {
   try {
     await navigator.clipboard.writeText(artistName);
-    
+
+    // Track the copy
+    trackCopy(artistName);
+
     // Visual feedback
     element.classList.add('copied');
     showNotification(`✓ Copied: ${artistName}`);
-    
+
     setTimeout(() => {
       element.classList.remove('copied');
     }, 1000);
@@ -893,18 +983,345 @@ async function copyArtistName(artistName, element) {
 function setupGridSizeControl() {
   const slider = document.getElementById('gridSizeSlider');
   const valueDisplay = document.getElementById('gridSizeValue');
-  
+
   slider.addEventListener('input', (e) => {
     state.gridSize = parseInt(e.target.value);
     valueDisplay.textContent = state.gridSize;
-    
+
     // Update all visible grids immediately
     rerenderExpandedGalleries();
-    
+
     // Save to config
     state.config.uiState.gridSize = state.gridSize;
     saveConfig();
   });
+}
+
+// ===== RANKING HELPER SYSTEM =====
+function initRankHelper() {
+  // Load ELO data from config
+  if (state.config.rankHelper) {
+    state.rankHelper = state.config.rankHelper;
+  } else {
+    state.rankHelper = {
+      eloData: {},
+      history: [],
+      comparisonCount: 0,
+      currentPair: null
+    };
+  }
+
+  // Initialize ELO data for all artists
+  state.allArtists.forEach(artist => {
+    if (!state.rankHelper.eloData[artist.name]) {
+      state.rankHelper.eloData[artist.name] = {
+        elo: artist.elo || RH_INITIAL_ELO,
+        comparisons: artist.comparisons || 0
+      };
+    }
+  });
+
+  saveRankHelperData();
+}
+
+function saveRankHelperData() {
+  state.config.rankHelper = state.rankHelper;
+
+  // Also update artist records
+  Object.keys(state.rankHelper.eloData).forEach(artistName => {
+    if (state.config.artists[artistName]) {
+      state.config.artists[artistName].elo = state.rankHelper.eloData[artistName].elo;
+      state.config.artists[artistName].comparisons = state.rankHelper.eloData[artistName].comparisons;
+    }
+  });
+
+  saveConfig();
+}
+
+function startRankHelper() {
+  const pair = getNextRankPair();
+  if (!pair) {
+    showNotification('All artists have been compared sufficiently!', 'success');
+    return;
+  }
+
+  state.rankHelper.currentPair = pair;
+  displayRankPair(pair);
+  updateRankProgress();
+}
+
+function getNextRankPair() {
+  // Swiss tournament: pair artists with similar ELO and fewer comparisons
+  const candidates = state.allArtists.map(a => ({
+    name: a.name,
+    elo: state.rankHelper.eloData[a.name]?.elo || RH_INITIAL_ELO,
+    comparisons: state.rankHelper.eloData[a.name]?.comparisons || 0
+  }));
+
+  // Sort by comparisons (ascending) then by ELO deviation from initial
+  candidates.sort((a, b) => {
+    if (a.comparisons !== b.comparisons) return a.comparisons - b.comparisons;
+    return Math.abs(a.elo - RH_INITIAL_ELO) - Math.abs(b.elo - RH_INITIAL_ELO);
+  });
+
+  // Get artists with fewest comparisons
+  const minComparisons = candidates[0].comparisons;
+  const needMoreComparisons = candidates.filter(c => c.comparisons <= minComparisons + 2);
+
+  if (needMoreComparisons.length < 2) return null;
+
+  // Sort by ELO for Swiss-style pairing
+  needMoreComparisons.sort((a, b) => b.elo - a.elo);
+
+  // Pick adjacent pairs (similar ELO)
+  const idx = Math.floor(Math.random() * (needMoreComparisons.length - 1));
+  const pair = [needMoreComparisons[idx], needMoreComparisons[idx + 1]];
+
+  // Randomize left/right
+  if (Math.random() < 0.5) pair.reverse();
+
+  return pair;
+}
+
+function displayRankPair(pair) {
+  const container = document.getElementById('rankPairContainer');
+  if (!container) return;
+
+  container.innerHTML = `
+    <div class="rank-comparison">
+      <div class="rank-contestant" data-winner="${pair[0].name}">
+        <img src="artists/${state.config.artists[pair[0].name].filename}" alt="${pair[0].name}">
+        <div class="rank-contestant-info">
+          <h3>${pair[0].name}</h3>
+          <div class="rank-contestant-elo">ELO: ${Math.round(pair[0].elo)}</div>
+          <div class="rank-contestant-comparisons">${pair[0].comparisons} comparisons</div>
+        </div>
+        <button class="rank-pick-btn" onclick="pickWinner('${pair[0].name}')">Pick This (←)</button>
+      </div>
+
+      <div class="rank-vs">VS</div>
+
+      <div class="rank-contestant" data-winner="${pair[1].name}">
+        <img src="artists/${state.config.artists[pair[1].name].filename}" alt="${pair[1].name}">
+        <div class="rank-contestant-info">
+          <h3>${pair[1].name}</h3>
+          <div class="rank-contestant-elo">ELO: ${Math.round(pair[1].elo)}</div>
+          <div class="rank-contestant-comparisons">${pair[1].comparisons} comparisons</div>
+        </div>
+        <button class="rank-pick-btn" onclick="pickWinner('${pair[1].name}')">Pick This (→)</button>
+      </div>
+    </div>
+  `;
+}
+
+function pickWinner(winnerName) {
+  if (!state.rankHelper.currentPair) return;
+
+  const pair = state.rankHelper.currentPair;
+  const winner = pair.find(p => p.name === winnerName);
+  const loser = pair.find(p => p.name !== winnerName);
+
+  if (!winner || !loser) return;
+
+  // Calculate ELO changes
+  const winnerData = state.rankHelper.eloData[winner.name];
+  const loserData = state.rankHelper.eloData[loser.name];
+
+  const expectedWinner = 1 / (1 + Math.pow(10, (loserData.elo - winnerData.elo) / 400));
+  const expectedLoser = 1 - expectedWinner;
+
+  const winnerEloBefore = winnerData.elo;
+  const loserEloBefore = loserData.elo;
+
+  winnerData.elo += RH_K_FACTOR * (1 - expectedWinner);
+  loserData.elo += RH_K_FACTOR * (0 - expectedLoser);
+
+  winnerData.comparisons++;
+  loserData.comparisons++;
+
+  // Record history for undo
+  state.rankHelper.history.push({
+    winner: winner.name,
+    loser: loser.name,
+    winnerEloBefore,
+    loserEloBefore
+  });
+
+  state.rankHelper.comparisonCount++;
+
+  // Visual feedback
+  const winnerEl = document.querySelector(`[data-winner="${winnerName}"]`);
+  if (winnerEl) {
+    winnerEl.style.background = 'rgba(46, 213, 115, 0.2)';
+    setTimeout(() => {
+      winnerEl.style.background = '';
+    }, 500);
+  }
+
+  saveRankHelperData();
+
+  // Get next pair
+  setTimeout(() => {
+    startRankHelper();
+  }, 600);
+}
+
+function skipRankPair() {
+  startRankHelper();
+}
+
+function undoLastRank() {
+  if (state.rankHelper.history.length === 0) {
+    showNotification('Nothing to undo', 'error');
+    return;
+  }
+
+  const last = state.rankHelper.history.pop();
+
+  // Restore ELO
+  state.rankHelper.eloData[last.winner].elo = last.winnerEloBefore;
+  state.rankHelper.eloData[last.loser].elo = last.loserEloBefore;
+  state.rankHelper.eloData[last.winner].comparisons--;
+  state.rankHelper.eloData[last.loser].comparisons--;
+
+  state.rankHelper.comparisonCount--;
+
+  saveRankHelperData();
+  showNotification('✓ Undone last comparison', 'success');
+
+  startRankHelper();
+}
+
+function updateRankProgress() {
+  const total = state.allArtists.length * RH_TARGET_COMPARISONS;
+  const current = Object.values(state.rankHelper.eloData)
+    .reduce((sum, data) => sum + data.comparisons, 0);
+
+  const progress = Math.min(100, (current / total) * 100);
+  const progressEl = document.getElementById('rankProgress');
+  const progressText = document.getElementById('rankProgressText');
+
+  if (progressEl) progressEl.style.width = `${progress}%`;
+  if (progressText) progressText.textContent = `${current} / ${total} comparisons`;
+
+  // Update confidence level
+  const avgComparisons = current / state.allArtists.length;
+  let confidence = 'Low';
+  if (avgComparisons >= 8) confidence = 'Very High';
+  else if (avgComparisons >= 6) confidence = 'High';
+  else if (avgComparisons >= 4) confidence = 'Good';
+  else if (avgComparisons >= 2) confidence = 'Medium';
+
+  const confidenceEl = document.getElementById('confidenceLevel');
+  if (confidenceEl) confidenceEl.textContent = confidence;
+}
+
+function getGradeForArtist(artistName) {
+  const allElos = state.allArtists.map(a => state.rankHelper.eloData[a.name]?.elo || RH_INITIAL_ELO);
+  const artistElo = state.rankHelper.eloData[artistName]?.elo || RH_INITIAL_ELO;
+
+  // Count how many are below this artist
+  const belowCount = allElos.filter(e => e < artistElo).length;
+  const percentile = belowCount / allElos.length;
+
+  // Find grade based on percentile
+  for (let i = 0; i < RH_GRADE_PERCENTILES.length; i++) {
+    if (percentile < RH_GRADE_PERCENTILES[i]) {
+      return RH_GRADES[i];
+    }
+  }
+  return RH_GRADES[RH_GRADES.length - 1];
+}
+
+function applyEloRankings() {
+  if (!confirm('Apply ELO-based grades to all artists?')) return;
+
+  state.allArtists.forEach(artist => {
+    const grade = getGradeForArtist(artist.name);
+    state.config.artists[artist.name].grade = grade;
+    artist.grade = grade;
+  });
+
+  saveConfig();
+  buildGalleries();
+  showNotification('✓ Grades applied successfully!', 'success');
+}
+
+function restartRankHelper() {
+  if (!confirm('Reset all ELO rankings? This cannot be undone.')) return;
+
+  state.rankHelper = {
+    eloData: {},
+    history: [],
+    comparisonCount: 0,
+    currentPair: null
+  };
+
+  state.allArtists.forEach(artist => {
+    state.rankHelper.eloData[artist.name] = {
+      elo: RH_INITIAL_ELO,
+      comparisons: 0
+    };
+    state.config.artists[artist.name].elo = RH_INITIAL_ELO;
+    state.config.artists[artist.name].comparisons = 0;
+  });
+
+  saveRankHelperData();
+  showNotification('✓ Rankings reset', 'success');
+  startRankHelper();
+}
+
+// ===== COPY TRACKING =====
+function trackCopy(artistName) {
+  // Update copy count
+  if (!state.config.artists[artistName].copyCount) {
+    state.config.artists[artistName].copyCount = 0;
+  }
+  state.config.artists[artistName].copyCount++;
+
+  // Update recent copies
+  state.recentCopies.unshift({
+    name: artistName,
+    timestamp: new Date().toISOString()
+  });
+
+  // Keep only last 10
+  state.recentCopies = state.recentCopies.slice(0, 10);
+
+  // Save to config
+  state.config.copyHistory = state.recentCopies;
+
+  saveConfig();
+  updateRecentCopiesPanel();
+}
+
+function updateRecentCopiesPanel() {
+  const panel = document.getElementById('recentCopiesPanel');
+  if (!panel) return;
+
+  if (state.recentCopies.length === 0) {
+    panel.innerHTML = '<p style="color: #666; font-size: 0.85em;">No recent copies</p>';
+    return;
+  }
+
+  panel.innerHTML = state.recentCopies.map(item => {
+    const timeAgo = getTimeAgo(item.timestamp);
+    return `
+      <div class="recent-copy-item" onclick="navigateToArtist('${item.name}')">
+        <span class="recent-copy-name">${item.name}</span>
+        <span class="recent-copy-time">${timeAgo}</span>
+      </div>
+    `;
+  }).join('');
+}
+
+function getTimeAgo(timestamp) {
+  const seconds = Math.floor((new Date() - new Date(timestamp)) / 1000);
+
+  if (seconds < 60) return 'just now';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+  return `${Math.floor(seconds / 86400)}d ago`;
 }
 
 // ===== UI STATE RESTORATION =====
@@ -928,10 +1345,10 @@ function restoreUIState() {
 async function init() {
   try {
     showLoading();
-    
+
     // Load config
     state.config = await loadConfig();
-    
+
     // Ensure UI state structure exists
     if (!state.config.uiState) {
       state.config.uiState = {
@@ -940,37 +1357,53 @@ async function init() {
         gridSize: 5
       };
     }
-    
+
     // Load saved grid size
     if (state.config.uiState.gridSize) {
       state.gridSize = state.config.uiState.gridSize;
       const slider = document.getElementById('gridSizeSlider');
       const valueDisplay = document.getElementById('gridSizeValue');
-      slider.value = state.gridSize;
-      valueDisplay.textContent = state.gridSize;
+      if (slider && valueDisplay) {
+        slider.value = state.gridSize;
+        valueDisplay.textContent = state.gridSize;
+      }
     }
-    
+
+    // Load copy history
+    if (state.config.copyHistory) {
+      state.recentCopies = state.config.copyHistory;
+    }
+
     // Scan for images
     const files = await fetchImages();
-    
+
     // Process images and detect new ones
     const newArtists = processImages(files);
-    
+
+    // Initialize ranking system
+    initRankHelper();
+
     // Build galleries
     buildGalleries();
-    
+
     // Restore UI state
     restoreUIState();
-    
+
+    // Update statistics
+    updateEnhancedStatistics();
+
+    // Update recent copies panel
+    updateRecentCopiesPanel();
+
     // Save if new artists were found
     if (newArtists.length > 0) {
       await saveConfig();
     }
-    
+
     hideLoading();
-    
+
     console.log(`Gallery loaded: ${state.allArtists.length} artists, ${newArtists.length} new`);
-    
+
   } catch (error) {
     console.error('Initialization error:', error);
     showError(error.message);
@@ -1028,9 +1461,90 @@ function setupEventListeners() {
   });
 }
 
+// ===== TAB SWITCHING =====
+function switchTab(tabName) {
+  // Hide all tabs
+  document.querySelectorAll('.tab-content').forEach(tab => {
+    tab.classList.remove('active');
+  });
+
+  // Remove active from all tab buttons
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.classList.remove('active');
+  });
+
+  // Show selected tab
+  const tabMap = {
+    'gallery': 'galleryTab',
+    'ranking': 'rankingTab',
+    'comparison': 'comparisonTab',
+    'statistics': 'statisticsTab'
+  };
+
+  const tabElement = document.getElementById(tabMap[tabName]);
+  if (tabElement) {
+    tabElement.classList.add('active');
+  }
+
+  // Set active button
+  event?.target?.classList.add('active');
+
+  // Perform tab-specific actions
+  if (tabName === 'statistics') {
+    updateEnhancedStatistics();
+    updateRecentCopiesPanel();
+  } else if (tabName === 'ranking') {
+    updateRankProgress();
+  }
+}
+
+// ===== KEYBOARD SHORTCUTS =====
+function setupKeyboardShortcuts() {
+  document.addEventListener('keydown', (e) => {
+    // Only handle shortcuts in ranking tab
+    const rankingTab = document.getElementById('rankingTab');
+    if (!rankingTab || !rankingTab.classList.contains('active')) {
+      return;
+    }
+
+    // Left arrow - pick left contestant
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      const leftContestant = document.querySelector('.rank-contestant:first-child');
+      if (leftContestant) {
+        const artistName = leftContestant.dataset.winner;
+        if (artistName) pickWinner(artistName);
+      }
+    }
+
+    // Right arrow - pick right contestant
+    else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      const rightContestant = document.querySelector('.rank-contestant:last-child');
+      if (rightContestant) {
+        const artistName = rightContestant.dataset.winner;
+        if (artistName) pickWinner(artistName);
+      }
+    }
+
+    // Up arrow - skip
+    else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      skipRankPair();
+    }
+
+    // Down arrow - undo
+    else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      undoLastRank();
+    }
+  });
+}
+
 // ===== START APPLICATION =====
 document.addEventListener('DOMContentLoaded', () => {
   setupLazyLoading();
   setupEventListeners();
+  setupKeyboardShortcuts();
   init();
 });

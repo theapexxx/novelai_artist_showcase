@@ -24,23 +24,34 @@
 
   <!-- Main Content -->
   <div id="mainContent" style="display: none;">
-    <!-- Header -->
-    <header>
-      <h1>🎨 AI Artist Gallery</h1>
-      <div class="controls">
-        <input type="text" id="searchInput" placeholder="🔍 Search artists, tags, or 'favorite'...">
-        <button id="refreshBtn" title="Rescan artists folder">🔄 Refresh</button>
-        <button id="settingsBtn" title="Manage tags">⚙️ Settings</button>
-      </div>
-      <button id="acknowledgeNewBtn" style="display:none">🆕 Acknowledge All New (<span id="newCount">0</span>)</button>
-    </header>
-
-    <!-- Statistics Bar -->
-    <div class="stats-bar">
-      <span>Total: <strong id="totalCount">0</strong></span>
-      <span>Favorites: <strong id="favCount">0</strong></span>
-      <span>Tags: <strong id="tagCount">0</strong></span>
+    <!-- Tab Navigation -->
+    <div class="tab-navigation">
+      <button class="tab-btn active" onclick="switchTab('gallery')">🖼️ Gallery</button>
+      <button class="tab-btn" onclick="switchTab('ranking')">🏆 Ranking</button>
+      <button class="tab-btn" onclick="switchTab('comparison')">⚖️ Compare</button>
+      <button class="tab-btn" onclick="switchTab('statistics')">📊 Stats</button>
     </div>
+
+    <!-- Gallery Tab -->
+    <div id="galleryTab" class="tab-content active">
+      <!-- Header -->
+      <header>
+        <h1>🎨 AI Artist Gallery</h1>
+        <div class="controls">
+          <input type="text" id="searchInput" placeholder="🔍 Search artists, tags, or 'favorite'...">
+          <button id="refreshBtn" title="Rescan artists folder">🔄 Refresh</button>
+          <button id="settingsBtn" title="Manage tags">⚙️ Settings</button>
+        </div>
+        <button id="acknowledgeNewBtn" style="display:none">🆕 Acknowledge All New (<span id="newCount">0</span>)</button>
+      </header>
+
+      <!-- Statistics Bar -->
+      <div class="stats-bar">
+        <span>Total: <strong id="totalCount">0</strong></span>
+        <span>Favorites: <strong id="favCount">0</strong></span>
+        <span>Tags: <strong id="tagCount">0</strong></span>
+        <span>Rated: <strong id="ratedCount">0</strong></span>
+      </div>
 
     <!-- Grid Size Control -->
     <div class="grid-size-control">
@@ -96,12 +107,140 @@
         </div>
       </section>
 
-      <!-- Tags Section -->
-      <section class="gallery-section">
-        <h2>━━━ TAGS ━━━━━━━━━━━━━━━━</h2>
-        <div id="tagGalleries"></div>
-      </section>
-    </main>
+        <!-- Tags Section -->
+        <section class="gallery-section">
+          <h2>━━━ TAGS ━━━━━━━━━━━━━━━━</h2>
+          <div id="tagGalleries"></div>
+        </section>
+      </main>
+    </div>
+
+    <!-- Ranking Tab -->
+    <div id="rankingTab" class="tab-content">
+      <div class="ranking-container">
+        <div class="ranking-header">
+          <h2>🏆 Swiss Tournament Ranking</h2>
+          <p>Compare artists head-to-head. The system uses ELO ratings to create fair matchups.</p>
+        </div>
+
+        <div class="ranking-progress">
+          <div class="progress-header">
+            <span>Progress: <strong id="rankProgressText">0 / 0 comparisons</strong></span>
+            <span>Confidence: <strong id="confidenceLevel">Low</strong></span>
+          </div>
+          <div class="progress-bar-container">
+            <div class="progress-bar" id="rankProgress" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <div class="ranking-controls">
+          <button onclick="startRankHelper()" class="rank-btn-primary">▶️ Start/Continue Ranking</button>
+          <button onclick="applyEloRankings()" class="rank-btn-success">✓ Apply Grades</button>
+          <button onclick="restartRankHelper()" class="rank-btn-danger">🔄 Reset Rankings</button>
+        </div>
+
+        <div id="rankPairContainer" class="rank-pair-container">
+          <p style="text-align: center; color: #666; padding: 40px;">Click "Start/Continue Ranking" to begin comparing artists</p>
+        </div>
+
+        <div class="ranking-controls-bottom">
+          <button onclick="undoLastRank()" class="rank-btn-secondary">↶ Undo (↓)</button>
+          <button onclick="skipRankPair()" class="rank-btn-secondary">⏭️ Skip (↑)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Comparison Tab -->
+    <div id="comparisonTab" class="tab-content">
+      <div class="comparison-container">
+        <h2>⚖️ Side-by-Side Comparison</h2>
+        <p>Select two artists from the gallery to compare them side by side</p>
+        <div id="comparisonSlots" class="comparison-slots">
+          <div class="comparison-slot" id="compSlot1">
+            <p class="empty-slot-message">Click on an artist in the Gallery tab, then click "Add to Comparison"</p>
+          </div>
+          <div class="comparison-slot" id="compSlot2">
+            <p class="empty-slot-message">Select a second artist to compare</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Statistics Tab -->
+    <div id="statisticsTab" class="tab-content">
+      <div class="statistics-container">
+        <h2>📊 Gallery Statistics</h2>
+
+        <div class="stats-section">
+          <h3>Recent Copies</h3>
+          <div id="recentCopiesPanel" class="recent-copies-panel">
+            <p style="color: #666;">No recent copies</p>
+          </div>
+        </div>
+
+        <div class="stats-section">
+          <h3>Grade Distribution</h3>
+          <div class="grade-distribution">
+            <div class="grade-dist-row" data-grade="ss">
+              <span class="grade-badge grade-ss">SS</span>
+              <div class="grade-bar-container">
+                <div class="grade-bar" id="gradeBarSS" style="width: 0%"></div>
+              </div>
+              <span class="grade-count" id="gradeCountSS">0</span>
+            </div>
+            <div class="grade-dist-row" data-grade="s">
+              <span class="grade-badge grade-s">S</span>
+              <div class="grade-bar-container">
+                <div class="grade-bar" id="gradeBarS" style="width: 0%"></div>
+              </div>
+              <span class="grade-count" id="gradeCountS">0</span>
+            </div>
+            <div class="grade-dist-row" data-grade="a">
+              <span class="grade-badge grade-a">A</span>
+              <div class="grade-bar-container">
+                <div class="grade-bar" id="gradeBarA" style="width: 0%"></div>
+              </div>
+              <span class="grade-count" id="gradeCountA">0</span>
+            </div>
+            <div class="grade-dist-row" data-grade="b">
+              <span class="grade-badge grade-b">B</span>
+              <div class="grade-bar-container">
+                <div class="grade-bar" id="gradeBarB" style="width: 0%"></div>
+              </div>
+              <span class="grade-count" id="gradeCountB">0</span>
+            </div>
+            <div class="grade-dist-row" data-grade="c">
+              <span class="grade-badge grade-c">C</span>
+              <div class="grade-bar-container">
+                <div class="grade-bar" id="gradeBarC" style="width: 0%"></div>
+              </div>
+              <span class="grade-count" id="gradeCountC">0</span>
+            </div>
+            <div class="grade-dist-row" data-grade="d">
+              <span class="grade-badge grade-d">D</span>
+              <div class="grade-bar-container">
+                <div class="grade-bar" id="gradeBarD" style="width: 0%"></div>
+              </div>
+              <span class="grade-count" id="gradeCountD">0</span>
+            </div>
+            <div class="grade-dist-row" data-grade="e">
+              <span class="grade-badge grade-e">E</span>
+              <div class="grade-bar-container">
+                <div class="grade-bar" id="gradeBarE" style="width: 0%"></div>
+              </div>
+              <span class="grade-count" id="gradeCountE">0</span>
+            </div>
+            <div class="grade-dist-row" data-grade="f">
+              <span class="grade-badge grade-f">F</span>
+              <div class="grade-bar-container">
+                <div class="grade-bar" id="gradeBarF" style="width: 0%"></div>
+              </div>
+              <span class="grade-count" id="gradeCountF">0</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Tag Management Modal -->
