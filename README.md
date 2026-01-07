@@ -19,6 +19,8 @@ A comprehensive tool for managing, ranking, and organizing artist styles for use
 
 ---
 
+<img width="1876" height="1171" alt="image" src="https://github.com/user-attachments/assets/578b5667-d51c-4e1f-835e-d77960f51dd4" />
+
 ## Overview
 
 This tool helps you:
@@ -346,3 +348,4 @@ Feel free to modify and share this tool. Attribution appreciated but not require
 
 
 Happy genning!
+
