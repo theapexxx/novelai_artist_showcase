@@ -116,24 +116,47 @@ async function loadConfig() {
   return await response.json();
 }
 
-async function saveConfig() {
+// Debounced save to prevent too many disk writes
+let saveConfigTimer = null;
+const SAVE_DEBOUNCE_MS = 1000; // Wait 1 second after last change
+
+async function saveConfigNow() {
   try {
     const response = await fetch('/api/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(state.config)
     });
-    
+
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.error || 'Failed to save config');
     }
-    
+
     console.log('✓ Config saved successfully');
   } catch (error) {
     console.error('Failed to save config:', error);
     showNotification('⚠️ Failed to save changes!', 'error');
   }
+}
+
+function saveConfig() {
+  // Debounce: only save after user stops making changes
+  if (saveConfigTimer) {
+    clearTimeout(saveConfigTimer);
+  }
+  saveConfigTimer = setTimeout(() => {
+    saveConfigNow();
+  }, SAVE_DEBOUNCE_MS);
+}
+
+// For critical saves (e.g., when closing, navigation)
+function saveConfigImmediate() {
+  if (saveConfigTimer) {
+    clearTimeout(saveConfigTimer);
+    saveConfigTimer = null;
+  }
+  return saveConfigNow();
 }
 
 function showNotification(message, type = 'success') {
@@ -569,9 +592,9 @@ function toggleFavorite(artistName) {
 // ===== SMART CARD UPDATE (prevents blinking) =====
 function updateArtistCards(artistName) {
   // Find all cards for this artist across all galleries
-  const cards = document.querySelectorAll(`[data-artist="${artistName}"]`);
+  const cards = document.querySelectorAll(`.artist-card[data-artist="${artistName}"]`);
   const artist = state.config.artists[artistName];
-  
+
   cards.forEach(card => {
     // Update favorite button
     const favoriteBtn = card.querySelector('.favorite-btn');
@@ -579,7 +602,7 @@ function updateArtistCards(artistName) {
       favoriteBtn.className = `favorite-btn ${artist.favorite ? 'active' : ''}`;
       favoriteBtn.textContent = artist.favorite ? '⭐' : '☆';
     }
-    
+
     // Update tags
     const tagsContainer = card.querySelector('.artist-tags');
     if (tagsContainer) {
@@ -590,6 +613,34 @@ function updateArtistCards(artistName) {
         })
         .join('');
       tagsContainer.innerHTML = tagHtml;
+    }
+
+    // Update grade badge
+    const imageContainer = card.querySelector('.card-image-container');
+    const existingBadge = card.querySelector('.card-grade-badge');
+    if (artist.grade) {
+      const badgeHtml = `<div class="card-grade-badge"><span class="grade-badge grade-${artist.grade.toLowerCase()}">${artist.grade}</span></div>`;
+      if (existingBadge) {
+        existingBadge.outerHTML = badgeHtml;
+      } else if (imageContainer) {
+        imageContainer.insertAdjacentHTML('beforeend', badgeHtml);
+      }
+    } else if (existingBadge) {
+      existingBadge.remove();
+    }
+
+    // Update copy count
+    const artistMeta = card.querySelector('.artist-meta');
+    const existingCopyCount = card.querySelector('.copy-count');
+    if (artist.copyCount > 0) {
+      const copyCountHtml = `<span class="copy-count" title="Copied ${artist.copyCount} times">📋 ${artist.copyCount}</span>`;
+      if (existingCopyCount) {
+        existingCopyCount.outerHTML = copyCountHtml;
+      } else if (artistMeta) {
+        artistMeta.insertAdjacentHTML('beforeend', copyCountHtml);
+      }
+    } else if (existingCopyCount) {
+      existingCopyCount.remove();
     }
   });
 }
@@ -1012,16 +1063,21 @@ function initRankHelper() {
   }
 
   // Initialize ELO data for all artists
+  let hasNewData = false;
   state.allArtists.forEach(artist => {
     if (!state.rankHelper.eloData[artist.name]) {
       state.rankHelper.eloData[artist.name] = {
         elo: artist.elo || RH_INITIAL_ELO,
         comparisons: artist.comparisons || 0
       };
+      hasNewData = true;
     }
   });
 
-  saveRankHelperData();
+  // Only save if we actually added new data
+  if (hasNewData) {
+    saveRankHelperData();
+  }
 }
 
 function saveRankHelperData() {
@@ -1035,6 +1091,7 @@ function saveRankHelperData() {
     }
   });
 
+  // Use debounced save
   saveConfig();
 }
 
@@ -1242,9 +1299,19 @@ function applyEloRankings() {
     artist.grade = grade;
   });
 
-  saveConfig();
-  buildGalleries();
+  // Don't rebuild galleries, just update the visible cards
+  updateAllVisibleCards();
+  updateEnhancedStatistics();
+
+  saveConfigImmediate(); // Immediate save for important action
   showNotification('✓ Grades applied successfully!', 'success');
+}
+
+function updateAllVisibleCards() {
+  // Update all currently visible artist cards with new grades
+  state.allArtists.forEach(artist => {
+    updateArtistCards(artist.name);
+  });
 }
 
 function restartRankHelper() {
@@ -1291,8 +1358,16 @@ function trackCopy(artistName) {
   // Save to config
   state.config.copyHistory = state.recentCopies;
 
+  // Update card visually
+  updateArtistCards(artistName);
+
+  // Debounced save
   saveConfig();
-  updateRecentCopiesPanel();
+
+  // Update panel if on stats tab
+  if (document.getElementById('statisticsTab')?.classList.contains('active')) {
+    updateRecentCopiesPanel();
+  }
 }
 
 function updateRecentCopiesPanel() {
@@ -1395,9 +1470,9 @@ async function init() {
     // Update recent copies panel
     updateRecentCopiesPanel();
 
-    // Save if new artists were found
+    // Save immediately if new artists were found
     if (newArtists.length > 0) {
-      await saveConfig();
+      await saveConfigNow();
     }
 
     hideLoading();
@@ -1547,4 +1622,12 @@ document.addEventListener('DOMContentLoaded', () => {
   setupEventListeners();
   setupKeyboardShortcuts();
   init();
+
+  // Save on page unload to prevent data loss
+  window.addEventListener('beforeunload', (e) => {
+    if (saveConfigTimer) {
+      // Force immediate save if there are pending changes
+      saveConfigImmediate();
+    }
+  });
 });
