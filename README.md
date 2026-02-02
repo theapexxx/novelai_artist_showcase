@@ -47,7 +47,8 @@ artist_showcase/
 ├── artists_data.js          # Auto-generated artist list
 ├── generate_artist_list.ps1 # PowerShell script (Windows)
 ├── generate_artist_list.sh  # Shell script (MacOS/Linux)
-├── update_artists.bat       # Easy double-click to update artists (Windows)
+├── update_artists.bat       # Double-click to update artists (Windows)
+├── update_artists.command   # Double-click to update artists (MacOS)
 ├── README.md                # This file
 └── images/
     ├── V4.5/                # Your artist images go here
@@ -389,10 +390,11 @@ The web tool (`index.html`) works on any operating system - just open it in your
 
 However, the helper scripts for updating the artist list are platform-specific:
 
-| Platform | Script |
-|----------|--------|
-| Windows | `update_artists.bat` (double-click) |
-| MacOS/Linux | `generate_artist_list.sh` (terminal) |
+| Platform | Double-click | Terminal |
+|----------|--------------|----------|
+| Windows | `update_artists.bat` | `generate_artist_list.ps1` |
+| MacOS | `update_artists.command` | `generate_artist_list.sh` |
+| Linux | — | `generate_artist_list.sh` |
 
 ### Using the Tool on MacOS/Linux
 
@@ -403,14 +405,22 @@ However, the helper scripts for updating the artist list are platform-specific:
 
 **If you're adding your own images:**
 
+**Option A: Double-click (MacOS only)**
+1. First time setup - right-click `update_artists.command` → Open → Click "Open" in the dialog
+2. After that, you can double-click `update_artists.command` to run it
+3. Refresh the browser
+
+> **Note**: MacOS may block the script the first time. Go to System Preferences → Security & Privacy → Click "Open Anyway"
+
+**Option B: Terminal (MacOS/Linux)**
 1. Open Terminal and navigate to the tool folder:
    ```bash
    cd /path/to/artist_showcase
    ```
 
-2. Make the script executable (first time only):
+2. Make the scripts executable (first time only):
    ```bash
-   chmod +x generate_artist_list.sh
+   chmod +x generate_artist_list.sh update_artists.command
    ```
 
 3. Run the script:
