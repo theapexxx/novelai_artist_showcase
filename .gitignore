@@ -1,0 +1,19 @@
+# System files
+.DS_Store
+Thumbs.db
+*.log
+desktop.ini
+
+# Editor files
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# Artist images (download separately from Google Drive - see README)
+images/V4.5/
+images/test/
+
+# Keep placeholder image
+!images/placeholder.png
+
