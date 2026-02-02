@@ -43,10 +43,11 @@ This tool helps you:
 ### Files Structure
 ```
 artist_showcase/
-├── index.html    # Main application
+├── index.html               # Main application
 ├── artists_data.js          # Auto-generated artist list
-├── generate_artist_list.ps1 # PowerShell script to update artist list
-├── update_artists.bat       # Easy double-click to update artists
+├── generate_artist_list.ps1 # PowerShell script (Windows)
+├── generate_artist_list.sh  # Shell script (MacOS/Linux)
+├── update_artists.bat       # Easy double-click to update artists (Windows)
 ├── README.md                # This file
 └── images/
     ├── V4.5/                # Your artist images go here
@@ -379,6 +380,51 @@ If `update_artists.bat` fails:
 ### Grid View Shows Overlapping Images
 - Try refreshing the page
 - Clear browser cache (Ctrl+Shift+R)
+
+---
+
+## Note for MacOS/Linux Users
+
+The web tool (`index.html`) works on any operating system - just open it in your browser!
+
+However, the helper scripts for updating the artist list are platform-specific:
+
+| Platform | Script |
+|----------|--------|
+| Windows | `update_artists.bat` (double-click) |
+| MacOS/Linux | `generate_artist_list.sh` (terminal) |
+
+### Using the Tool on MacOS/Linux
+
+**If you're using the pre-made artist images:**
+- Just download the images from Google Drive and place them in `images/V4.5/`
+- The included `artists_data.js` already matches these images
+- No scripts needed - just open `index.html`!
+
+**If you're adding your own images:**
+
+1. Open Terminal and navigate to the tool folder:
+   ```bash
+   cd /path/to/artist_showcase
+   ```
+
+2. Make the script executable (first time only):
+   ```bash
+   chmod +x generate_artist_list.sh
+   ```
+
+3. Run the script:
+   ```bash
+   ./generate_artist_list.sh
+   ```
+
+4. Refresh the browser
+
+The script accepts optional parameters:
+```bash
+./generate_artist_list.sh [image_folder] [output_file]
+# Example: ./generate_artist_list.sh V4.5 artists_data.js
+```
 
 ---
 
