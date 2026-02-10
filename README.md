@@ -114,6 +114,8 @@ artist_showcase/
 
 ---
 
+<img width="1876" height="1171" alt="Screenshot 2026-01-07 034928" src="https://github.com/user-attachments/assets/dffb6ae1-f979-4cbb-84a4-ddb63e71b494" />
+
 ## Artist Showcase Tab
 
 The main tab for browsing and managing your artist collection.
@@ -158,6 +160,8 @@ Click the **☰** button to access:
 - 📂 **Import Data**: Restore rankings from a JSON file
 
 ---
+
+<img width="1875" height="1178" alt="Screenshot 2026-01-07 035018" src="https://github.com/user-attachments/assets/a9ef574c-be07-43f2-b718-609dfa2f7db5" />
 
 ## Rank Helper Tab
 
@@ -216,6 +220,8 @@ NOTE: All ELO data will be saved locally. That means that you can continue with 
 
 ---
 
+<img width="1871" height="1169" alt="Screenshot 2026-01-07 035116" src="https://github.com/user-attachments/assets/ace73bb1-cf3b-44f2-b922-1985edfe2545" />
+
 ## Tag Selector Tab
 
 A comprehensive library of Danbooru tags organized by category.
@@ -236,6 +242,8 @@ A comprehensive library of Danbooru tags organized by category.
 - And many more...
 
 ---
+
+<img width="1753" height="1127" alt="Screenshot 2026-02-02 192351" src="https://github.com/user-attachments/assets/ecf7d3bd-239d-402b-899c-4a83e7b43a50" />
 
 ## Artist Mixes Tab
 
